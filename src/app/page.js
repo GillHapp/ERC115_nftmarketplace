@@ -159,11 +159,41 @@ export default function Home() {
     }
   };
 
+  const handleBuyPrompt = async (item) => {
+    if (!contract) return alert('Contract not connected.');
+
+    const amountStr = prompt(`Enter how many "${item.metadata.name}" NFTs to buy:`);
+    const amount = parseInt(amountStr);
+
+    if (!amount || amount <= 0) {
+      return alert('❌ Invalid amount.');
+    }
+
+    try {
+      const totalPrice = ethers.parseEther((parseFloat(item.price) * amount).toString());
+
+      const tx = await contract.buyNFT(item.tokenId, amount, {
+        value: totalPrice,
+      });
+
+      await tx.wait();
+      alert('✅ NFT purchased successfully!');
+      fetchListings();
+    } catch (err) {
+      console.error('❌ Transaction error:', err);
+      alert('Purchase failed. See console for details.');
+    }
+  };
+
+
+
+
+
   // 
 
-  // useEffect(() => {
-  //   if (contract) fetchListings();
-  // }, [contract]);
+  useEffect(() => {
+    if (contract) fetchListings();
+  }, [contract]);
 
   return (
     <div className="App">
@@ -209,8 +239,8 @@ export default function Home() {
           ) : (
             <div className="nft-grid">
               {listings.map((item) => (
-                <div key={item.tokenId} className="nft-card">
-                  <img src={item.metadata.image} alt={item.metadata.name} width={200} />
+                <div key={item.tokenId} className="nft-card" >
+                  <img src={item.metadata.image} alt={item.metadata.name} />
                   <h3>{item.metadata.name}</h3>
                   <p>{item.metadata.description}</p>
                   <p><strong>Token ID:</strong> {item.tokenId}</p>
@@ -218,6 +248,7 @@ export default function Home() {
                   <p>
                     <strong>Seller:</strong> {item.seller.slice(0, 6)}...{item.seller.slice(-4)}
                   </p>
+                  <button onClick={() => handleBuyPrompt(item)}>Buy</button>
                 </div>
               ))}
             </div>
