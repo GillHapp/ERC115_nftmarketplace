@@ -81,6 +81,7 @@ textarea {
 /* NFT Cards */
 .nft-card {
   background-color: #1e293b;
+  width: 100%;
   padding: 1rem;
   border-radius: 10px;
   margin-bottom: 1.5rem;
@@ -88,11 +89,16 @@ textarea {
 }
 
 .nft-card img {
-  width: 100%;
+  width: 150px;
+  /* Adjust width as needed */
   height: auto;
-  border-radius: 6px;
-  margin-bottom: 0.8rem;
+  /* Maintain aspect ratio */
+  border-radius: 8px;
+  /* Optional: adds rounded corners */
+  object-fit: cover;
+  /* Ensures consistent layout */
 }
+
 
 .nft-card h3 {
   margin: 0;
