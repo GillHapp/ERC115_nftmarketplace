@@ -1,103 +1,234 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import axios from 'axios';
+import CONTRACTABI from './contractABI.json';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const CONTRACT_ADDRESS = "0x2a909c6806a4e6c14864F8407C0AAC6671DAeEfE";
+  const [walletAddress, setWalletAddress] = useState(null);
+  const [contract, setContract] = useState(null);
+  const [nftName, setNftName] = useState('');
+  const [nftMetadata, setNftMetadata] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [price, setPrice] = useState('');
+  const [supply, setSupply] = useState('');
+  const [listings, setListings] = useState([]);
+  const [loadingListings, setLoadingListings] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  const connectWallet = async () => {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        setWalletAddress(accounts[0]);
+
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, CONTRACTABI, signer);
+        setContract(contractInstance);
+        console.log('✅ Contract connected');
+      } catch (err) {
+        console.error('❌ Wallet connection error:', err);
+      }
+    } else {
+      alert('Please install MetaMask.');
+    }
+  };
+
+  const disconnectWallet = () => {
+    setWalletAddress(null);
+    setContract(null);
+  };
+
+  const fetchListings = async () => {
+    if (!contract) return;
+    setLoadingListings(true);
+    try {
+      const rawListings = await contract.getAllListings();
+      const processedListings = await Promise.all(
+        rawListings.map(async (nft) => {
+          try {
+            const res = await fetch(nft.tokenURI);
+            const metadata = await res.json();
+
+            return {
+              tokenId: Number(nft.tokenId),
+              seller: nft.seller,
+              price: ethers.formatEther(nft.price),
+              supply: Number(nft.supply),
+              metadata,
+            };
+          } catch (err) {
+            console.error(`❌ Failed to fetch metadata for tokenId ${nft.tokenId}:`, err);
+            return null;
+          }
+        })
+      );
+      setListings(processedListings.filter(Boolean));
+
+      setListings(processedListings);
+    } catch (err) {
+      console.error('❌ Fetching listings failed:', err);
+    } finally {
+      setLoadingListings(false);
+    }
+  };
+
+  useEffect(() => {
+    if (contract) fetchListings();
+  }, [contract]);
+
+
+
+
+
+  const uploadToIPFS = async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await axios.post('https://api.pinata.cloud/pinning/pinFileToIPFS', formData, {
+        headers: {
+          pinata_api_key: '3f964d49ce5beca2da5c',
+          pinata_secret_api_key: 'dff92d908f3bba1f58524fde93a23c000bf459062e75bf4bbaabe912b24b4d5c',
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      const cid = res.data.IpfsHash;
+      console.log('✅ Image uploaded:', cid);
+
+      return cid;
+    } catch (err) {
+      console.error('❌ IPFS Image Upload Error:', err);
+    }
+  };
+
+  const pinJSONToIPFS = async (name, description, imageCID, price, supply) => {
+    const metadata = {
+      name,
+      description,
+      image: `https://gateway.pinata.cloud/ipfs/${imageCID}`,
+      price,
+      supply,
+    };
+
+    try {
+      const res = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiIxNTAzYWNlOC1hZTc3LTRmYzUtOGFmOS0xZTIzYjhiZDhmMTIiLCJlbWFpbCI6ImdpbGxoYXJwcmVldHNpbmdoMjExQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaW5fcG9saWN5Ijp7InJlZ2lvbnMiOlt7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6IkZSQTEifSx7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6Ik5ZQzEifV0sInZlcnNpb24iOjF9LCJtZmFfZW5hYmxlZCI6ZmFsc2UsInN0YXR1cyI6IkFDVElWRSJ9LCJhdXRoZW50aWNhdGlvblR5cGUiOiJzY29wZWRLZXkiLCJzY29wZWRLZXlLZXkiOiIzZjk2NGQ0OWNlNWJlY2EyZGE1YyIsInNjb3BlZEtleVNlY3JldCI6ImRmZjkyZDkwOGYzYmJhMWY1ODUyNGZkZTkzYTIzYzAwMGJmNDU5MDYyZTc1YmY0YmJhYWJlOTEyYjI0YjRkNWMiLCJleHAiOjE3ODExNDY3NTB9.2tIux_0yNi7yjzAEp1UFcTsX8PkY9vnsV5AW3o9Gnls`,
+        },
+        body: JSON.stringify(metadata),
+      });
+      const data = await res.json();
+      console.log('✅ Metadata uploaded:', data.IpfsHash);
+      return data.IpfsHash;
+    } catch (err) {
+      console.error('❌ Metadata upload failed:', err);
+    }
+  };
+
+  const handleMintAndList = async (e) => {
+    e.preventDefault();
+
+    if (!contract) return alert('Contract not connected.');
+    if (!nftName || !nftMetadata || !imageFile || !price || !supply) {
+      return alert('Please fill in all fields.');
+    }
+
+    try {
+      const imageCID = await uploadToIPFS(imageFile);
+      if (!imageCID) return alert('Image upload failed.');
+
+      const metadataCID = await pinJSONToIPFS(nftName, nftMetadata, imageCID, price, supply);
+      const metadataURL = `https://gateway.pinata.cloud/ipfs/${metadataCID}`;
+
+      const tx = await contract.mintAndListNFT(
+        metadataURL,
+        ethers.parseEther(price.toString()),
+        parseInt(supply)
+      );
+      await tx.wait();
+
+      alert('✅ NFT minted and listed!');
+      fetchListings();
+    } catch (err) {
+      console.error('❌ Minting/listing error:', err);
+      alert('Minting failed.');
+    }
+  };
+
+  // 
+
+  // useEffect(() => {
+  //   if (contract) fetchListings();
+  // }, [contract]);
+
+  return (
+    <div className="App">
+      <h1>ERC1155 NFT Marketplace</h1>
+      {walletAddress ? (
+        <>
+          <p>Connected Wallet: {walletAddress}</p>
+          <button onClick={disconnectWallet}>Disconnect</button>
+
+          <form onSubmit={handleMintAndList} className="nft-form">
+            <div>
+              <label>NFT Name:</label>
+              <input type="text" value={nftName} onChange={(e) => setNftName(e.target.value)} />
+            </div>
+            <div>
+              <label>Description:</label>
+              <textarea value={nftMetadata} onChange={(e) => setNftMetadata(e.target.value)} />
+            </div>
+            <div>
+              <label>Image File:</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setImageFile(e.target.files[0])}
+              />
+            </div>
+            <div>
+              <label>Price (in ETH):</label>
+              <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
+            </div>
+            <div>
+              <label>Supply:</label>
+              <input type="number" value={supply} onChange={(e) => setSupply(e.target.value)} />
+            </div>
+            <button type="submit">Mint & List NFT</button>
+          </form>
+
+          <h2>Marketplace Listings</h2>
+          {loadingListings ? (
+            <p>Loading...</p>
+          ) : listings.length === 0 ? (
+            <p>No NFTs listed.</p>
+          ) : (
+            <div className="nft-grid">
+              {listings.map((item) => (
+                <div key={item.tokenId} className="nft-card">
+                  <img src={item.metadata.image} alt={item.metadata.name} width={200} />
+                  <h3>{item.metadata.name}</h3>
+                  <p>{item.metadata.description}</p>
+                  <p><strong>Token ID:</strong> {item.tokenId}</p>
+                  <p><strong>Price:</strong> Ξ {item.price}</p>
+                  <p>
+                    <strong>Seller:</strong> {item.seller.slice(0, 6)}...{item.seller.slice(-4)}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+
+          )}
+        </>
+      ) : (
+        <button onClick={connectWallet}>Connect Wallet</button>
+      )}
     </div>
   );
 }
+
